@@ -36,7 +36,7 @@ class RiGraph:
         :return:
         """
         for node in the_last_layer:
-            neighbors = self.g[node]
+            neighbors = self.g[node] #python list pass reference
             ln = len(neighbors) - 1
             p, q = 0, ln
             while p <= q:
@@ -45,8 +45,8 @@ class RiGraph:
                 while p <= ln and visited[neighbors[p]] == root:
                     p += 1
                 if p < q:
-                    neighbors[p], neighbors[q] = neighbors[q], neighbors[p]
-            tmp_list[node] = p
+                    neighbors[p], neighbors[q] = neighbors[q], neighbors[p] #self.g is updated accordingly
+            tmp_list[node] = p # for node in the last layer, its "degree" is the number nodes visited from root by BSF
 
     def bfs(self, root, tmp_list, visited):
         """
@@ -61,11 +61,11 @@ class RiGraph:
         :return: distance_dict
         """
         g = self.g
-        last_layer = deque()
+        last_layer = deque() #previous layer more precisely 
         last_layer.append(root)
-        distance_dict = {root: 0}
-        visited[root] = root
-        layer_count = 1
+        distance_dict = {root: 0} #distance from root to root is zero, of course
+        visited[root] = root #root node visited by root, of course
+        layer_count = 1 #root is at layer 1
         while True:
             next_layer = deque()
             for node_ in last_layer:
@@ -75,7 +75,7 @@ class RiGraph:
                         visited[nb] = root
                         next_layer.append(nb)
                 tmp_list[node_] = len(neighbors)
-            if len(next_layer) == 0:
+            if len(next_layer) == 0: #no more unvisited nodes
                 return distance_dict
             for _ in next_layer:
                 distance_dict[_] = layer_count
@@ -95,13 +95,13 @@ class RiGraph:
         :return: sp_dict, a dictionary of {node: its_new_identifier} pairs
         """
         layer_list = [node_layer_dict[node] for node in nb_nodes]
-        if self.discount:
+        if self.discount: #seems irrelevant
             root_degree = self.logDegrees_[root]
             degree_list = [self.logDegrees_[node] for node in nb_nodes]
         else:
             root_degree = self.degrees_[root]
             degree_list = [self.degrees_[node] for node in nb_nodes]
-        sp_dict = {node_: hash((root_degree, layer_, degree_)) for node_, layer_, degree_ in
+        sp_dict = {node_: hash((root_degree, layer_, degree_)) for node_, layer_, degree_ in #hash identical, if same root, same layer and same degree
                    zip(nb_nodes, layer_list, degree_list)}
         return sp_dict
 
@@ -213,17 +213,17 @@ def save_random_walks(walks, part, i):
 
 def process_random_walks_chunk(ri_graph, vertices, part_id, until, num_walks, walk_length):
     walks_all = []
-    i = 0
-    tmp_list = [0] * ri_graph.num_nodes
-    visited = [-1] * ri_graph.num_nodes
-    wl_lists = [[0] * (until + 1) for _ in range(ri_graph.num_nodes)]
+    i = 0 #count random walk node sequence file
+    tmp_list = [0] * ri_graph.num_nodes #degree for each node
+    visited = [-1] * ri_graph.num_nodes #flag if a node is visited by a root (another node)
+    wl_lists = [[0] * (until + 1) for _ in range(ri_graph.num_nodes)] #TODO: not used?
     bfs_time_ = 0
     walk_time_ = 0
     ri_time_ = 0
     walks_writing_time_ = 0
     for count, v in enumerate(vertices):
         bfs_begin_time_ = time.time()
-        node_layer_dict = ri_graph.bfs(v, tmp_list, visited)
+        node_layer_dict = ri_graph.bfs(v, tmp_list, visited) #conduct BFS from node v, return visited node deg and visited by which root
         bfs_end_time_ = time.time()
         bfs_time_ += (bfs_end_time_ - bfs_begin_time_)
 
@@ -236,7 +236,7 @@ def process_random_walks_chunk(ri_graph, vertices, part_id, until, num_walks, wa
 
         ri_begin_time_ = time.time()
         if 'sp' == ri_graph.flag:
-            sp_dict = ri_graph.get_sp_dict(v, node_layer_dict, nei_nodes)
+            sp_dict = ri_graph.get_sp_dict(v, node_layer_dict, nei_nodes) #return a dict {v:v,node1:hash1,node2:hash2}
             sp_walks = get_ri_walks(walks, v, sp_dict)
             walks_all.extend(sp_walks)
 
@@ -251,7 +251,7 @@ def process_random_walks_chunk(ri_graph, vertices, part_id, until, num_walks, wa
             logging.debug('worker {} has processed {} nodes.'.format(part_id, count))
 
         walks_writing_begin_time_ = time.time()
-        if len(walks_all) > 1000000:
+        if len(walks_all) > 1000000: # the upper limit of number of walks for each file 
             save_random_walks(walks_all, part_id, i)
             i += 1
             walks_all = []

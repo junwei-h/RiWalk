@@ -18,7 +18,52 @@ import os
 import glob
 import logging
 import sys
+ 
+#below added to view embedding 2-dim
+import umap
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from matplotlib import rc
+rc('text', usetex=False)
+ROOT_DIR = os.getcwd()
 
+def plot_UMAP_projection(embedding_df, hue_on='label', labelsize=20, fontsize=22, labels=[0,1,2],
+                         linewidth=0.000001, savefig_path=None):
+    
+    palette_pool = ['blue','green','red','cyan','magenta','yellow','black']
+    markers_pool = ['.','^','X','8','s','p','s','*','+']
+    sizes_pool = [30, 150, 10]
+
+    palette = []
+    markers = []
+    sizes = []
+    for i in range(len(labels)):
+        palette.append(palette_pool[i%len(palette_pool)])
+        markers.append(markers_pool[i%len(markers_pool)])
+        sizes.append(sizes_pool[i%len(sizes_pool)])
+
+    fig_dims = (20, 12)
+    fig, ax = plt.subplots(figsize=fig_dims)
+    sns.scatterplot(x='dim_0', y='dim_1', hue=hue_on, style=hue_on, markers=markers, size=hue_on,
+                    sizes=sizes, linewidth=linewidth, palette=palette, data=embedding_df, ax=ax)
+    ax.set_xlabel('Dimension 1', fontsize=fontsize)
+    ax.set_ylabel('Dimension 2', fontsize=fontsize)
+    ax.tick_params(axis='both', which='major', labelsize=fontsize, direction='in')
+    L = ax.legend(prop={'size': labelsize}, facecolor="#EEEEEE", handletextpad=-0.5)
+    if hue_on == 'label':
+        L.get_texts()[0].set_text('True label')
+    else:
+        L.get_texts()[0].set_text('Predicted label')
+    
+    for i in range(len(labels)):
+        L.get_texts()[i+1].set_text(u"Label {}".format(labels[i]))
+
+    if savefig_path == None:
+        plt.show()
+    else:
+        plt.savefig(savefig_path, bbox_inches='tight', pad_inches=0)
+    fig.show()
 
 def debug(type_, value, tb):
     if hasattr(sys, 'ps1') or not sys.stderr.isatty():
@@ -124,7 +169,7 @@ class RiWalk:
 
         walk_files = glob.glob('walks/__random_walks_*.txt')
         sentences = Sentences(walk_files)
-        model = Word2Vec(sentences, size=dim, window=window_size, min_count=0, sg=1, hs=0, workers=workers, iter=iter_num)
+        model = Word2Vec(sentences, size=dim, window=window_size, min_count=0, sg=1, hs=0, workers=workers, iter=iter_num, seed=9900)
 
         learning_end_time = time.time()
         logging.debug('done learning embeddings')
@@ -140,7 +185,8 @@ class RiWalk:
         nx_g = nx.read_edgelist(input_file_name, nodetype=int, create_using=nx.DiGraph())
         for edge in nx_g.edges():
             nx_g[edge[0]][edge[1]]['weight'] = 1
-        nx_g = nx_g.to_undirected()
+        # nx_g = nx_g.to_undirected() # an edge [0,1] will be returned to [[0,1],[1,0]]
+        nx_g = nx_g.to_directed() #Test
 
         logging.debug('done reading graph')
         read_end_time = time.time()
@@ -213,6 +259,24 @@ def main():
     logging.debug('embedding_writing_time: {}'.format(time.time() - write_begin_time))
 
     json.dump({'time': total_time}, open(args.output.replace('.emb', '_time.json'), 'w'))
+
+
+    # visualizes embedding
+    wv_df = pd.DataFrame(wv.vectors,index=[int(i) for i in wv.index2word])
+    df = pd.read_csv(os.path.join(ROOT_DIR, args.input.replace('.edgelist', '.group')), header=None, delimiter=" ", names=["label"], index_col=0)
+    df_label = wv_df.join(df)['label']
+    unique_labels = sorted(df_label.unique())
+
+    reducer = umap.UMAP(random_state=42, n_components=2, min_dist=0.01, n_neighbors=15, learning_rate=0.1)
+    embedding = reducer.fit_transform(wv_df)
+
+    embedding_df = pd.DataFrame(embedding, columns=('dim_0', 'dim_1'))
+    embedding_df['label'] = df_label.tolist()
+
+    plot_UMAP_projection(embedding_df=embedding_df, hue_on='label', fontsize=19, labelsize=22,
+        labels=unique_labels,
+        savefig_path=os.path.join(ROOT_DIR, u'figures/{}_umap_iter{}_flag{}_size{}.png'.format(args.input.split('/')[1].split('.')[0],args.iter, args.flag, args.window_size))
+        )
 
 
 if __name__ == '__main__':
